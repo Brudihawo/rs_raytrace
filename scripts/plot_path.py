@@ -18,28 +18,58 @@ def draw_circle(midpoint, radius, max_height, samples=50):
     plt.plot(xs, -ys, c="tab:red")
 
 
+def conic(x, radius, conic_param):
+    return np.power(x, 2) \
+        / (radius * (1 + np.sqrt(1
+                                 - (1 + conic_param)
+                                 * np.power(x / radius, 2))))
+
+
+def draw_conic(midpoint, radius, conic_param, max_height, samples=50):
+    # input validation
+    if (conic_param > -1 and max_height ** 2 > radius**2 / (1 + conic_param)) \
+            or radius == 0:
+        print("Invalid lens parametrisation")
+        return
+
+    xs = np.linspace(-max_height, max_height, samples)
+    ys = conic(xs, radius, conic_param)
+
+    plt.plot(ys + midpoint, xs, c="tab:red")
+
+
 with open("./boundaries.json", "r") as file:
-    for id, boundary in json.load(file).items():
-        if boundary["type"] == "line":
-            plt.vlines(boundary["midpoint"], -boundary["radius"],
-                       boundary["radius"], color="tab:red")
-            plt.text(boundary["midpoint"], boundary["radius"] * 0.9,
-                     boundary["opt_idx"])
-        elif boundary["type"] == "spherical":
-            draw_circle(boundary["midpoint"], boundary["radius"],
-                        boundary["height"], 150)
+    for id, b in json.load(file).items():
+        print(f"Btype: {b['type']}")
 
-            if boundary["radius"] > 0:
-                xmax = - np.sqrt(boundary["radius"] ** 2
-                                 - boundary["height"] ** 2) \
-                    + boundary["midpoint"]
+        if b["type"] == "line":
+            plt.vlines(b["midpoint"], -b["radius"],
+                       b["radius"], color="tab:red")
+            plt.text(b["midpoint"], b["radius"] * 0.9,
+                     b["opt_idx"])
+        elif b["type"] == "spherical":
+            draw_circle(b["midpoint"], b["radius"],
+                        b["height"], 150)
+
+            if b["radius"] > 0:
+                xmax = - np.sqrt(b["radius"] ** 2
+                                 - b["height"] ** 2) \
+                    + b["midpoint"]
             else:
-                xmax = np.sqrt(boundary["radius"] ** 2
-                               - boundary["height"] ** 2) \
-                    + boundary["midpoint"]
+                xmax = np.sqrt(b["radius"] ** 2
+                               - b["height"] ** 2) \
+                    + b["midpoint"]
 
-            plt.text(xmax, boundary["height"] * 0.9,
-                     boundary["opt_idx"])
+            plt.text(xmax, b["height"] * 0.9,
+                     b["opt_idx"])
+
+        elif b["type"] == "conical":
+            draw_conic(b["midpoint"], b["radius"],
+                       b["conic_param"], b["height"])
+
+            plt.text(conic(b["height"], b["radius"], b["conic_param"]) + b["midpoint"],
+                     b["height"] * 0.9,
+                     b["opt_idx"])
 
 
 cols = ["ray_id", "x", "y", "angle"]

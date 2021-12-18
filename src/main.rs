@@ -1,4 +1,4 @@
-use std::f64::consts::{FRAC_1_PI, PI};
+use std::f64::consts::{FRAC_1_PI, FRAC_PI_2, PI};
 use std::fs::File;
 use std::io::prelude::*;
 
@@ -14,17 +14,28 @@ fn lerp(x0: f64, x1: f64, t: f64) -> f64 {
     return x0 * (1.0 - t) + x1 * t;
 }
 
+fn conic(r: f64, kappa: f64, radius: f64) -> f64 {
+    r.powi(2) / (radius * (1.0 - (1.0 + kappa) * r.powi(2) / radius.powi(2)))
+}
+
 enum BoundaryType {
     Line {
         opt_idx: f64,
         midpoint: f64,
-        radius: f64,
+        radius: f64, // maximum distance from optical axis
     },
     Spherical {
         opt_idx: f64,
         midpoint: f64,
         radius: f64,
-        height: f64,
+        height: f64, // maximum distance from optical axis
+    },
+    Conic {
+        opt_idx: f64,
+        midpoint: f64,
+        radius: f64,
+        conic_param: f64,
+        height: f64, // maximum distance from optical axis
     },
 }
 
@@ -191,6 +202,80 @@ impl Ray {
                     return true;
                 }
             }
+            // TODO: Negative Radius
+            BoundaryType::Conic {
+                opt_idx,
+                midpoint,
+                radius,
+                conic_param,
+                height,
+            } => {
+                let x0 = self.x;
+                let y0 = self.y;
+                let phi = self.angle;
+
+                let c0 = -(1.0 + conic_param + phi.tan().powi(2));
+                let c1 =
+                    2.0 * (radius - (1.0 + conic_param) * (x0 - midpoint) - y0 * self.angle.tan());
+                let c2 = 2.0 * radius * (x0 - midpoint)
+                    - (1.0 + conic_param) * (x0 - midpoint).powi(2)
+                    - y0.powi(2);
+
+                let p = c1 / c0;
+                let q = c2 / c0;
+                let det = (p / 2.0).powi(2) - q;
+
+                // No solution / no intersection
+                if det < 0.0 {
+                    return false;
+                }
+
+                let a: f64;
+                if *radius > 0.0 {
+                    a = -p / 2.0 - det.sqrt();
+                } else {
+                    a = -p / 2.0 + det.sqrt();
+                }
+
+                self.x += a;
+                self.y += a * self.angle.tan();
+
+                // Out of bounds check
+                if self.y.abs() > *height {
+                    return false;
+                }
+
+                let inter_angle: f64; // angle of boundary at intersection
+                let alpha: f64; // angle of incidence
+
+                let diff = (radius - (1.0 + conic_param) * (self.x - midpoint))
+                    / (2.0 * (self.x - midpoint) * radius
+                        - (self.x - midpoint).powi(2) * (1.0 + conic_param))
+                        .sqrt();
+
+                if self.y < 0.0 {
+                    if *radius > 0.0 {
+                        inter_angle = diff.atan();
+                    } else {
+                        inter_angle = (-diff).atan();
+                    }
+                    alpha = self.angle + inter_angle + FRAC_PI_2;
+                    self.angle =
+                        FRAC_PI_2 - inter_angle - (self.cur_n / opt_idx * alpha.sin()).asin();
+                } else {
+                    if *radius > 0.0 {
+                        inter_angle = (-diff).atan();
+                    } else {
+                        inter_angle = diff.atan();
+                    }
+                    alpha = self.angle + inter_angle - FRAC_PI_2;
+                    self.angle =
+                        -(FRAC_PI_2 + inter_angle + (self.cur_n / opt_idx * alpha.sin()).asin());
+                }
+                self.cur_n = *opt_idx;
+
+                true
+            }
         }
     }
 }
@@ -211,7 +296,7 @@ fn dump_boundaries(boundaries: &Vec<BoundaryType>) -> Result<(), std::io::Error>
                     format!(
                         "    \"type\": \"line\",\n    \
                              \"opt_idx\": {},\n    \
-                             \"midpoint\": {},\n    \
+                              \"midpoint\": {},\n    \
                              \"radius\": {}\n",
                         opt_idx, midpoint, radius
                     )
@@ -232,6 +317,26 @@ fn dump_boundaries(boundaries: &Vec<BoundaryType>) -> Result<(), std::io::Error>
                              \"radius\": {},\n    \
                              \"height\": {}\n",
                         opt_idx, midpoint, radius, height
+                    )
+                    .as_bytes(),
+                )?;
+            }
+            BoundaryType::Conic {
+                opt_idx,
+                midpoint,
+                radius,
+                conic_param,
+                height,
+            } => {
+                file.write(
+                    format!(
+                        "    \"type\": \"conical\",\n    \
+                             \"opt_idx\": {},\n    \
+                             \"midpoint\": {},\n    \
+                             \"radius\": {},\n    \
+                             \"height\": {},\n    \
+                             \"conic_param\": {}\n",
+                        opt_idx, midpoint, radius, height, conic_param
                     )
                     .as_bytes(),
                 )?;
@@ -269,123 +374,82 @@ fn validate_boundaries(boundaries: &Vec<BoundaryType>) -> bool {
                     return false;
                 }
             }
-        }
-    }
-    for (idx, pair) in boundaries.windows(2).enumerate() {
-        let _b0_rightmost: f64;
-        let _b1_leftmost: f64;
-        let b0_idx: f64;
-        let b1_idx: f64;
-
-        match pair[0] {
-            BoundaryType::Line {
-                opt_idx, midpoint, ..
-            } => {
-                _b0_rightmost = midpoint;
-                b0_idx = opt_idx;
-            }
-            BoundaryType::Spherical {
-                opt_idx,
-                midpoint,
+            BoundaryType::Conic {
                 radius,
+                opt_idx,
+                conic_param,
+                height,
                 ..
             } => {
-                _b0_rightmost = midpoint - radius;
-                b0_idx = opt_idx;
-            }
-        }
-
-        match pair[1] {
-            BoundaryType::Line {
-                opt_idx, midpoint, ..
-            } => {
-                _b1_leftmost = midpoint;
-                b1_idx = opt_idx;
-            }
-            BoundaryType::Spherical {
-                opt_idx,
-                midpoint,
-                radius,
-                height,
-            } => {
-                if radius < 0.0 {
-                    _b1_leftmost = midpoint + (radius.powi(2) - height.powi(2)).sqrt()
-                } else {
-                    _b1_leftmost = midpoint - radius;
+                if radius == 0.0 || opt_idx < 0.0 || conic_param <= -1.0 {
+                    eprintln!(
+                        "Invalid Parameters for Conic Boundary at index {}: Invalid values",
+                        idx
+                    );
+                    return false;
                 }
-                b1_idx = opt_idx;
+                // maximum reachable radius is larger than lens parametrisation allows
+                if height.powi(2) > radius.powi(2) / (1.0 + conic_param) && conic_param > -1.0 {
+                    eprintln!(
+                        "Invalid Parameters for Conic Boundary at index {}.\n\
+                               Height exceeds maximum value allowed by lens parametrisation.\n\
+                               H < sqrt(R^2 / (1 + conic_param)) (Here: H < {})",
+                        idx,
+                        (radius.powi(2) / (1.0 + conic_param)).sqrt()
+                    );
+                    return false;
+                }
             }
-        }
-
-        if b0_idx == b1_idx {
-            eprintln!(
-                "Optical indices are the same at boundaries {} and {}!",
-                idx,
-                idx + 1
-            );
-            return false;
         }
     }
-    false
+    true
 }
 
 fn main() {
     let boundaries = Vec::from([
-        BoundaryType::Line {
+        BoundaryType::Conic {
             opt_idx: 2.0,
-            midpoint: 5.0,
-            radius: 10.0,
-        },
-        BoundaryType::Line {
-            opt_idx: 1.0,
-            midpoint: 10.0,
-            radius: 10.0,
-        },
-        BoundaryType::Spherical {
-            opt_idx: 2.0,
-            midpoint: 30.0,
-            radius: 15.0,
-            height: 8.0,
-        },
-        // BoundaryType::Line {
-        //     opt_idx: 2.0,
-        //     midpoint: 20.0,
-        //     radius: 10.0,
-        // },
-        BoundaryType::Spherical {
-            opt_idx: 1.1,
-            midpoint: 5.0,
-            radius: -15.0,
-            height: 8.0,
+            midpoint: 15.0,
+            radius: -25.0,
+            conic_param: -0.9,
+            height: 10.0,
         },
         // BoundaryType::Spherical {
-        //     opt_idx: 1.0,
-        //     midpoint: 32.0,
-        //     radius: 15.0,
+        //     opt_idx: 2.0,
+        //     midpoint: -10.0,
+        //     radius: -25.0,
         //     height: 10.0,
         // },
         BoundaryType::Line {
+            opt_idx: 1.0,
+            midpoint: 20.0,
+            radius: 10.0,
+        },
+        BoundaryType::Line {
             opt_idx: 2.0,
-            midpoint: 32.0,
+            midpoint: 43.0,
             radius: 10.0,
         },
     ]);
-
+    if !validate_boundaries(&boundaries) {
+        eprintln!("Boundary Validation Failed. Aborting...");
+        std::process::exit(1);
+    }
     dump_boundaries(&boundaries).unwrap();
 
     let mut ray: Ray = Ray::new(0.0, 0.0, deg_to_rad(20.0), 1.0, boundaries);
 
     const N_RAYS: usize = 20;
     for idx in 0..(N_RAYS + 1) {
-        // ray.reset(
-        //     lerp(
-        //         deg_to_rad(-30.0),
-        //         deg_to_rad(30.0),
-        //         idx as f64 / N_RAYS as f64,
-        //     ),
-        //     0.0,
-        // );
-        ray.reset(0.0, lerp(-5.0, 5.0, idx as f64 / N_RAYS as f64));
+        ray.reset(
+            lerp(
+                deg_to_rad(-30.0),
+                deg_to_rad(30.0),
+                idx as f64 / N_RAYS as f64,
+            ),
+            0.0,
+        );
+        // ray.reset(0.0, lerp(-5.0, 5.0, idx as f64 / N_RAYS as f64));
         ray.print_state(false, idx);
         while ray.next_boundary() {
             ray.print_state(false, idx);
