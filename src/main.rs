@@ -203,6 +203,7 @@ impl Ray {
                 }
             }
             // TODO: Negative Radius
+            // TODO: conic_param < -1
             BoundaryType::Conic {
                 opt_idx,
                 midpoint,
@@ -230,11 +231,20 @@ impl Ray {
                     return false;
                 }
 
-                let a: f64;
+                let mut a: f64;
                 if *radius > 0.0 {
-                    a = -p / 2.0 - det.sqrt();
+                    if *conic_param >= -1.0 {
+                        a = -p / 2.0 - det.sqrt();
+                    } else {
+                        a = -p / 2.0 + det.sqrt();
+                    }
                 } else {
                     a = -p / 2.0 + det.sqrt();
+                }
+
+                // Handle intersection on optical axis and ray angle 0
+                if c0 == 0.0 {
+                    a = - c2 / c1;
                 }
 
                 self.x += a;
@@ -262,7 +272,7 @@ impl Ray {
                     alpha = self.angle + inter_angle + FRAC_PI_2;
                     self.angle =
                         FRAC_PI_2 - inter_angle - (self.cur_n / opt_idx * alpha.sin()).asin();
-                } else {
+                } else if self.y > 0.0 {
                     if *radius > 0.0 {
                         inter_angle = (-diff).atan();
                     } else {
@@ -271,6 +281,9 @@ impl Ray {
                     alpha = self.angle + inter_angle - FRAC_PI_2;
                     self.angle =
                         -(FRAC_PI_2 + inter_angle + (self.cur_n / opt_idx * alpha.sin()).asin());
+                } else { // handle intersection at y=0
+                    self.angle =
+                        -(PI + (self.cur_n / opt_idx * self.angle.sin()).asin());
                 }
                 self.cur_n = *opt_idx;
 
@@ -381,7 +394,8 @@ fn validate_boundaries(boundaries: &Vec<BoundaryType>) -> bool {
                 height,
                 ..
             } => {
-                if radius == 0.0 || opt_idx < 0.0 || conic_param <= -1.0 {
+                if radius == 0.0 || opt_idx < 0.0 {
+                    //|| conic_param <= -1.0 {
                     eprintln!(
                         "Invalid Parameters for Conic Boundary at index {}: Invalid values",
                         idx
@@ -410,7 +424,7 @@ fn main() {
         BoundaryType::Conic {
             opt_idx: 2.0,
             midpoint: 15.0,
-            radius: -25.0,
+            radius: 10.0,
             conic_param: -0.9,
             height: 10.0,
         },
