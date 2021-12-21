@@ -203,7 +203,6 @@ impl Ray {
                 }
             }
             // TODO: Negative Radius
-            // TODO: conic_param < -1
             BoundaryType::Conic {
                 opt_idx,
                 midpoint,
@@ -244,7 +243,7 @@ impl Ray {
 
                 // Handle intersection on optical axis and ray angle 0
                 if c0 == 0.0 {
-                    a = - c2 / c1;
+                    a = -c2 / c1;
                 }
 
                 self.x += a;
@@ -265,26 +264,34 @@ impl Ray {
 
                 if self.y < 0.0 {
                     if *radius > 0.0 {
-                        inter_angle = diff.atan();
+                        inter_angle = PI + (-diff).atan();
+                        alpha = self.angle - inter_angle + FRAC_PI_2;
+                        self.angle =
+                            FRAC_PI_2 - inter_angle - (self.cur_n / opt_idx * alpha.sin()).asin();
                     } else {
-                        inter_angle = (-diff).atan();
+                        inter_angle = PI - (-diff).atan();
+                        alpha = FRAC_PI_2 - self.angle - inter_angle;
+                        self.angle =
+                            FRAC_PI_2 - inter_angle - (self.cur_n / opt_idx * alpha.sin()).asin();
                     }
-                    alpha = self.angle + inter_angle + FRAC_PI_2;
-                    self.angle =
-                        FRAC_PI_2 - inter_angle - (self.cur_n / opt_idx * alpha.sin()).asin();
                 } else if self.y > 0.0 {
                     if *radius > 0.0 {
-                        inter_angle = (-diff).atan();
-                    } else {
                         inter_angle = diff.atan();
+                        alpha = self.angle - inter_angle + FRAC_PI_2;
+                        self.angle =
+                            FRAC_PI_2 - inter_angle - (self.cur_n / opt_idx * alpha.sin()).asin();
+                    } else {
+                        inter_angle = (-diff).atan();
+                        alpha = FRAC_PI_2 - self.angle - inter_angle;
+                        self.angle =
+                            FRAC_PI_2 - inter_angle - (self.cur_n / opt_idx * alpha.sin()).asin();
                     }
-                    alpha = self.angle + inter_angle - FRAC_PI_2;
-                    self.angle =
-                        -(FRAC_PI_2 + inter_angle + (self.cur_n / opt_idx * alpha.sin()).asin());
-                } else { // handle intersection at y=0
-                    self.angle =
-                        -(PI + (self.cur_n / opt_idx * self.angle.sin()).asin());
+                } else {
+                    // handle intersection at y=0
+                    self.angle = (self.cur_n / opt_idx * self.angle.sin()).asin();
+                    inter_angle = FRAC_PI_2;
                 }
+                eprintln!("{}", rad_to_deg(inter_angle));
                 self.cur_n = *opt_idx;
 
                 true
@@ -421,13 +428,6 @@ fn validate_boundaries(boundaries: &Vec<BoundaryType>) -> bool {
 
 fn main() {
     let boundaries = Vec::from([
-        BoundaryType::Conic {
-            opt_idx: 2.0,
-            midpoint: 15.0,
-            radius: 10.0,
-            conic_param: -0.9,
-            height: 10.0,
-        },
         // BoundaryType::Spherical {
         //     opt_idx: 2.0,
         //     midpoint: -10.0,
@@ -435,9 +435,16 @@ fn main() {
         //     height: 10.0,
         // },
         BoundaryType::Line {
-            opt_idx: 1.0,
-            midpoint: 20.0,
+            opt_idx: 2.0,
+            midpoint: 15.0,
             radius: 10.0,
+        },
+        BoundaryType::Conic {
+            opt_idx: 1.0,
+            midpoint: 25.0,
+            radius: 10.0,
+            conic_param: -0.9,
+            height: 10.0,
         },
         BoundaryType::Line {
             opt_idx: 2.0,
