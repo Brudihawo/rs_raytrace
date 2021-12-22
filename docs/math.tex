@@ -16,6 +16,8 @@
 \usepackage{csquotes}
 \usepackage{enumitem}
 \usepackage{textcomp}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.17}
 
 \usepackage{listings, listings-rust}
 
@@ -122,7 +124,8 @@ boundaries radius.
 
 The intersection angle will be the angle of the ray. This can be seen easily from the
 illustration.
-% TODO: Add illustration for vertical line intersection
+% todo: add illustration for vertical line intersection
+
 
 \clearpage
 \subsection{Spherical Boundaries}
@@ -177,7 +180,43 @@ $$\varphi_\text{tangent} = \frac{\pi}{2} - \varphi_\text{c},$$
 and the angle of incidence
 $$\alpha = \varphi + \varphi_\text{c}.$$
 % TODO: Add illustration for circular intersection
+\begin{figure}[h]
+  \centering
+  \begin{tikzpicture}
+    \begin{axis}[
+      width = 0.7\textwidth,
+      height = 0.7\textwidth,
+      samples = 100,
+      xlabel = {x},
+      ylabel = {y},
+      x label style = {at = {(axis description cs:1.0,0)}},
+      y label style = {at = {(axis description cs:0,1.0)}, rotate=-90},
+      line width = 1pt,
+      axis y line = left,
+      axis x line = bottom,
+      axis line style = {->},
+      legend cell align = left,
+      unit vector ratio* = 1 1 1,
+    ]
+    % circle
+    \addplot[color=black, domain=2:2.5]{sqrt(2^2 - (x - 4)^2)};
+    \addplot[color=black, domain=2:2.5]{-sqrt(2^2 - (x - 4)^2)};
 
+    % ray
+    \addplot[color=green, domain=0:(4 - sqrt(3))]{x / (4 - sqrt(3))};
+    % tangent
+    \addplot[color=red, domain=(4 - sqrt(3) - 1 / sqrt(3)):2.5]{(x - (4 - sqrt(3))) * sqrt(3) + 1};
+    % normal
+    \addplot[color=black, domain=(4 - sqrt(3) - 1 / sqrt(3)):4 - sqrt(3) + 1 / sqrt(3)]
+      {(x - (4 - sqrt(3))) * tan(atan(sqrt(3)) - 90) + 1};
+    \addplot[color=black, dashed, domain=0:4 - sqrt(3) + 1]{0};
+    % refracted ray
+    \addplot[color=green, domain=(4 - sqrt(3)): 3] {(x - 4 + sqrt(3)) * tan(6.3144) + 1};
+
+
+    \end{axis}
+  \end{tikzpicture}
+\end{figure}
 \clearpage
 \subsection{Conic Boundaries}
 Conic lines can be parametrised by the following equation:
