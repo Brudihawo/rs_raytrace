@@ -1,0 +1,309 @@
+\documentclass[12pt]{article}
+\usepackage[T1]{fontenc}
+\usepackage[width=16cm, height=21cm]{geometry}
+\usepackage[ngerman]{babel}
+\usepackage[hidelinks]{hyperref}
+
+\usepackage{amsmath}
+\usepackage{bm}
+
+\usepackage{tabularx}
+\usepackage{booktabs}
+
+\usepackage{graphicx}
+\usepackage{subcaption}
+
+\usepackage{csquotes}
+\usepackage{enumitem}
+\usepackage{textcomp}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.17}
+
+\usepackage{listings, listings-rust}
+
+\usepackage{fontspec}
+\defaultfontfeatures{Mapping=tex-text}
+\defaultfontfeatures{Ligatures=TeX}
+\setlength{\parindent}{0em}
+
+\newcommand*{\tageq}{\refstepcounter{equation}\tag{\theequation}}
+
+\newcommand{\abs}[1]{\left|#1\right|}
+\newcommand{\at}[2]{\left.#1\right|_{#2}}
+\newcommand{\deriv}[2]{\frac{\mathrm{d}#1}{\mathrm{d#2}}}
+
+\begin{document}
+\author{Hawo Höfer}
+\title{Optical Raytracing Demo in Rust}
+\maketitle
+\tableofcontents
+\clearpage
+
+This raytracer is a 2D raytracer, with (for now) rather limited capabilities. It is a
+Demo and should not be used for any serious applications.
+
+\clearpage
+\section{Basic Principles}
+We represent a ray by a pair of coordinates in the x-y-plane, the angle it propagates at,
+and the current refractive index of the material it propagates in. We apply Snell's law
+of refraction to compute refraction at boundaries:
+$$n_1 \sin(\alpha) = n_2 \sin(\beta),$$
+where $n_i$ are the refractive indices of the materials before and after the boundary,
+and $\alpha, \beta$ are the incident / refracted angles respectively.
+% TODO: add illustration for Refraction
+
+
+For computing the incident angle, we need to specify a way to represent boundaries. We
+can then test them for intersection. This raytracer works by using an iterative process
+to compute new ray directions and starting points. The top-level algorithm is:
+\begin{enumerate}
+  \item Compute the next intersection location. (If no intersection can be found, discard
+    this sample point.)
+  \item Compute the incident angle.
+  \item Apply Snell's law to compute the refracted angle.
+  \item Move to step 1.
+\end{enumerate}
+
+\clearpage
+\section{Computing Intersections and Intersection Angles}
+Depending on the type of boundary, computing the intersection can become increasingly
+difficult. Currently, this raytracer implements three Boundary types:
+\begin{enumerate}
+  \item vertical lines,
+  \item circular boundaries, and
+  \item conic boundaries.
+\end{enumerate}
+
+We use rust Enums to represent the boundaries:
+\begin{lstlisting}[caption={Representation of Boundary Types\label{lst:boundary_types}},language=Rust]
+  enum BoundaryType {
+      Line {
+          opt_idx: f64,
+          midpoint: f64,
+          radius: f64,
+      },
+      Spherical {
+          opt_idx: f64,
+          midpoint: f64,
+          radius: f64,
+          height: f64,
+      },
+      Conic {
+          opt_idx: f64,
+          midpoint: f64,
+          radius: f64,
+          conic_param: f64,
+          height: f64,
+      },
+  }
+\end{lstlisting}
+
+Each of those boundary types has their own way of computing a point of intersection.
+
+\clearpage
+\subsection{Vertical Lines}
+Vertical line boundaries are represented by a coordinate on the optical axis, and a
+radius, indicating the maximum distance from the optical axis (see Listing 
+\ref{lst:boundary_types}).
+
+Intersecting vertical lines is rather simple. From the current ray starting point, we
+have
+\begin{itemize}
+  \item the distance $\Delta x$ to the boundary along the optical axis (in $x$), and
+  \item the distance $\Delta y$ in $y$ the ray travels, depending on its angle.
+\end{itemize}
+The point of intersection will be at the midpoint coordinate of the Boundary
+(x-coordinate along the optical axis). The y-coordinate will depend on the angle of the
+ray:
+$$y_\text{inter} = y_0 + \Delta x \cdot \tan{\varphi},$$
+where $y_0$ and $\varphi$ are the starting coordinate of the ray and its angle,
+respectively. 
+
+We test for intersection by comparing absolute values of $y_\text{inter}$ and the
+boundaries radius.
+
+The intersection angle will be the angle of the ray. This can be seen easily from the
+illustration.
+% todo: add illustration for vertical line intersection
+
+
+\clearpage
+\subsection{Spherical Boundaries}
+Compared to vertical lines, spherical boundaries are a bit more tricky. We represent them
+using a midpoint on the optical axis, the circular radius, and a height, which is similar
+to the radius parameter of vertical line boundaries (see Listing
+\ref{lst:boundary_types}).
+
+\paragraph{Intersection} For intersection, we solve the following system of equations:
+\begin{align}
+  \label{eq:sph_0} (x_\text{inter} =)\quad x_0 + \Delta x & = m - r \cos\varphi_\text{c}\\
+  \label{eq:sph_1} (y_\text{inter} =)\quad y_0 + \Delta y & = r \sin\varphi_\text{c},
+\end{align}
+where $\Delta y = \Delta x \tan{\varphi}$, $\varphi_\text{c}$ is the angle of
+intersection on the circular boundary, and $m$ is the midpoint coordinate of the boundary
+on the optical axis.
+
+We use equation \eqref{eq:sph_1} to obtain
+\begin{equation}\label{eq:sph_dx}
+  \Delta x = \frac{r \sin\varphi_\text{c} - y_0}{\tan\varphi}.
+\end{equation}
+In equation \eqref{eq:sph_0}:
+\begin{align*}
+  x_0 + \frac{r \sin\varphi_\text{c} - y_0}{\tan\varphi}
+    &= m - r \cos\varphi_\text{c}\\
+  x_0 \tan\varphi + r \sin\varphi_\text{c} - y_0 
+    &= m \tan\varphi - r \tan\varphi \cos\varphi_\text{c}\\
+%
+  \frac{\tan(\varphi)(m - x_0) + y_0}{r}
+    & = \sin\varphi_\text{c} + \tan\varphi\cos\varphi_\text{c}\\
+    & = \sqrt{1 + \tan^2\varphi} \sin(\varphi_\text{c} + \arctan(\tan(\varphi)))\\
+    & = \sqrt{\frac{1}{\cos^2\varphi}} \sin(\varphi_\text{c} + \varphi)\\
+    & = \frac{\sin(\varphi_\text{c} + \varphi)}{\abs{\cos\varphi}}\\
+%
+  \sin(\varphi_\text{c} + \varphi)
+    & = \frac{\abs{\cos\varphi}}{r}(\tan(\varphi) (m - x_0) + y_0)\\
+  \tageq \label{eq:sph_phic} \varphi_\text{c} 
+    &= \arcsin\left(\frac{\abs{\cos\varphi}}{r}(\tan(\varphi) (m - x_0) + y_0)\right)
+\end{align*}
+We can then compute the $x$-coordinate of the intersection by using the results from
+equation \eqref{eq:sph_phic} in equations \eqref{eq:sph_0} and \eqref{eq:sph_1}.
+
+Note that equation \eqref{eq:sph_phic} will not yield an answer for $\varphi_\text{c}$ if
+$\abs{\frac{\abs{\cos\varphi}}{r} (\tan(\varphi)(m - x_0) + y_0)} > 1.0$. This this will
+be our necessary criterion for intersection. The sufficient criterion is
+$$\abs{y_\text{inter}} \leq y_\text{max},$$
+where $y_\text{max}$ is the maximum distance of the lens from the optical axis.
+
+\paragraph{Angle of Incidence} Using geometric reasoning, we find the tangent angle at
+the intersection point
+$$\varphi_\text{tangent} = \frac{\pi}{2} - \varphi_\text{c},$$
+and the angle of incidence
+$$\alpha = \varphi + \varphi_\text{c}.$$
+% TODO: Add illustration for circular intersection
+\begin{figure}[h]
+  \centering
+  \begin{tikzpicture}
+    \begin{axis}[
+      width = 0.7\textwidth,
+      height = 0.7\textwidth,
+      samples = 100,
+      xlabel = {x},
+      ylabel = {y},
+      x label style = {at = {(axis description cs:1.0,0)}},
+      y label style = {at = {(axis description cs:0,1.0)}, rotate=-90},
+      line width = 1pt,
+      axis y line = left,
+      axis x line = bottom,
+      axis line style = {->},
+      legend cell align = left,
+      unit vector ratio* = 1 1 1,
+    ]
+    % circle
+    \addplot[color=black, domain=2:2.5]{sqrt(2^2 - (x - 4)^2)};
+    \addplot[color=black, domain=2:2.5]{-sqrt(2^2 - (x - 4)^2)};
+
+    % ray
+    \addplot[color=green, domain=0:(4 - sqrt(3))]{x / (4 - sqrt(3))};
+    % tangent
+    \addplot[color=red, domain=(4 - sqrt(3) - 1 / sqrt(3)):2.5]{(x - (4 - sqrt(3))) * sqrt(3) + 1};
+    % normal
+    \addplot[color=black, domain=(4 - sqrt(3) - 1 / sqrt(3)):4 - sqrt(3) + 1 / sqrt(3)]
+      {(x - (4 - sqrt(3))) * tan(atan(sqrt(3)) - 90) + 1};
+    \addplot[color=black, dashed, domain=0:4 - sqrt(3) + 1]{0};
+    % refracted ray
+    \addplot[color=green, domain=(4 - sqrt(3)): 3] {(x - 4 + sqrt(3)) * tan(6.3144) + 1};
+
+
+    \end{axis}
+  \end{tikzpicture}
+\end{figure}
+\clearpage
+\subsection{Conic Boundaries}
+Conic lines can be parametrised by the following equation:
+\begin{equation}\label{eq:conic_parametr}
+  x(y) = \frac{y^2}{R \left(1 + \sqrt{1 - (1 + \kappa) \frac{y^2}{R^2}}\right)}
+\end{equation}
+With conic parameter $\kappa$ and radius $R$.
+
+$\kappa$ is used to determine the form of profile denoted by $x(y)$.
+\begin{itemize}
+  \item $\kappa < -1$ yields a hyperbola
+  \item $\kappa = -1$ yields a parabola
+  \item $\kappa \in (-1, 0)$ yields an ellipse (prolate spheroid)
+  \item $\kappa = 0$ yields a sphere
+  \item $\kappa > 0$ yields an ellipse (oblate spheroid)
+\end{itemize}
+
+\paragraph{Intersection} To compute the intersection, we solve the system of equations
+\begin{align}
+  \label{eq:conic_0} x_0 + \Delta x & = m + x(y_\text{inter})\\
+  \label{eq:conic_1} y_0 + \Delta x \tan\varphi & = y_\text{inter}
+\end{align}
+Solving equation \eqref{eq:conic_0} for $y_\text{inter}$ yields
+
+\begin{equation}\label{eq:conic_y_inter}
+  y_\text{inter} = z^{-1} (x_0 + \Delta x - m),
+\end{equation}
+where $(\cdot)^{-1}$ denotes the inverse function of $(\cdot)$.
+
+We compute the inverse of $x(y)$ (see equation \eqref{eq:conic_parametr}). For brevity,
+we write $x$ instead of $x(y)$.
+\begin{align*}
+  x & = \frac{y^2}{R \left(1 + \sqrt{1 - (1 + \kappa)\frac{y^2}{R^2}}\right)}\\
+  x R \left(1 + \sqrt{1 - (1 + \kappa)\frac{y^2}{R^2}}\right) & = y^2\\
+  x R + x \sqrt{R^2 - y^2(1 + \kappa)} & = y^2 \\
+  \left(R x - y^2\right)^2 & = x^2 R^2 - x^2 y^2 (1 + \kappa)\\
+  x^2 R^2 - 2 x R y^2 + y^4 & = x^2 R^2 - x^2 y^2 (1 + \kappa)\\
+  y^4 + y^2 \left(x^2 (1 + \kappa) - 2 x R\right) &= 0\\
+\end{align*}
+Let $\rho = y^2$. Then
+$$
+  \rho_{1, 2} = - \frac{x^2 (1 + \kappa) - 2 x R}{2}
+    \pm \abs{\frac{x^2 (1 + \kappa) - 2 x R}{2}}.
+$$
+
+Therefore (we discard the solution $\rho = 0$)
+\begin{equation}\label{eq:conic_inv}
+  y(x) = y^{-1}(x) = \pm \sqrt{2 x R - x^2(1 + \kappa)}
+\end{equation}
+
+We can now solve equations $\eqref{eq:conic_y_inter}$ and \eqref{eq:conic_1}.
+
+\begin{align*}
+  y_\text{inter} = y_0 + \Delta x \tan{\varphi} 
+    & = \pm \sqrt{2R * (x_0 + \Delta x - m) - (x_0 + \Delta x - m)^2 (1 + \kappa)}\\
+  y_0^2 + 2 \Delta x y_0 \tan\varphi + \Delta x^2 \tan^2\varphi
+    & = 2 R (x_0 - m) + 2 R \Delta x \\ & \phantom{==} 
+        - \left((x_0 - m)^2 + 2 \Delta x (x_0 - m) + \Delta x^2\right)(1 + \kappa)\\
+  0 & = \underbrace{\-\left(1 + \kappa +\tan^2\varphi\right)}_{:= c_0}
+        \Delta x^2 \\ & \phantom{==}
+        + \underbrace{2 \left(R - (1 + \kappa)(x_0 - m) - y_0 \tan\varphi\right)}_{:=c_1} 
+        \Delta x\\ &\phantom{==}
+        + \underbrace{2 \left(R (x_0 - m) - (1 + \kappa)(x_0 - m)^2 - y_0^2\right)}_{:=c_2}
+\end{align*}
+
+We now have
+\begin{equation}\label{eq:conic_dx}
+  \Delta x_{1, 2} = - \frac{c_1}{2 c_0} 
+    \pm \sqrt{\left(\frac{c_1}{2 c_0}\right)^2 + \frac{c_2}{c_0}},
+\end{equation}
+and can use this result to compute the intersection at $x_\text{inter}$. We have two
+solutions,and need to decide which one to use.
+We select a solution based on the sign of the Radius. If the radius is positive, the lens
+will be convex, and we want to select the smaller $\Delta x$. If the radius is negative,
+we want to select the larger $\Delta x$.
+Now, we can compute $y_\text{inter}$ and $x_\text{inter}$.
+
+\paragraph{Angle of Incidence}
+The tangent angle at the intersection can be obtained by using the derivative of the
+inverse conic function given in equation \eqref{eq:conic_inv}.
+\begin{equation}\label{eq:conic_inv_deriv}
+  \deriv{y}{x} = \pm \frac{R - (1 + \kappa) x)}{\sqrt{2 x R - x^2(1 + \kappa)}}
+\end{equation}
+We chose, which derivative we want to use based on the sign of $y_\text{inter}$.
+The angle of the boundary is given by
+\begin{equation}\label{eq:conic_inter_angle}
+  \varphi_\text{inter} = \arctan\left(\at{\deriv{y}{x}}{x = x_\text{inter}}\right)
+\end{equation}
+
+\end{document}
