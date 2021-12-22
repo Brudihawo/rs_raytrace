@@ -428,24 +428,24 @@ fn validate_boundaries(boundaries: &Vec<BoundaryType>) -> bool {
 
 fn main() {
     let boundaries = Vec::from([
-        // BoundaryType::Spherical {
-        //     opt_idx: 2.0,
-        //     midpoint: -10.0,
-        //     radius: -25.0,
-        //     height: 10.0,
-        // },
-        BoundaryType::Line {
-            opt_idx: 2.0,
-            midpoint: 15.0,
-            radius: 10.0,
-        },
         BoundaryType::Conic {
-            opt_idx: 1.0,
-            midpoint: 25.0,
+            opt_idx: 2.0,
+            midpoint: 4.0,
             radius: 10.0,
             conic_param: -0.9,
             height: 10.0,
         },
+        BoundaryType::Spherical {
+            opt_idx: 2.0,
+            midpoint: 4.0,
+            radius: 2.0,
+            height: 10.0,
+        },
+        // BoundaryType::Line {
+        //     opt_idx: 1.0,
+        //     midpoint: 20.0,
+        //     radius: 10.0,
+        // },
         BoundaryType::Line {
             opt_idx: 2.0,
             midpoint: 43.0,
@@ -458,23 +458,27 @@ fn main() {
     }
     dump_boundaries(&boundaries).unwrap();
 
-    let mut ray: Ray = Ray::new(0.0, 0.0, deg_to_rad(20.0), 1.0, boundaries);
-
-    const N_RAYS: usize = 20;
-    for idx in 0..(N_RAYS + 1) {
-        ray.reset(
-            lerp(
-                deg_to_rad(-30.0),
-                deg_to_rad(30.0),
-                idx as f64 / N_RAYS as f64,
-            ),
-            0.0,
-        );
-        // ray.reset(0.0, lerp(-5.0, 5.0, idx as f64 / N_RAYS as f64));
-        ray.print_state(false, idx);
-        while ray.next_boundary() {
-            ray.print_state(false, idx);
-        }
-        println!("");
+    let mut ray: Ray = Ray::new(0.0, 0.0, deg_to_rad(30.0), 1.0, boundaries);
+    ray.print_state(false, 0);
+    while ray.next_boundary() {
+        ray.print_state(false, 0);
     }
+
+    // const N_RAYS: usize = 20;
+    // for idx in 0..(N_RAYS + 1) {
+    //     ray.reset(
+    //         lerp(
+    //             deg_to_rad(-30.0),
+    //             deg_to_rad(30.0),
+    //             idx as f64 / N_RAYS as f64,
+    //         ),
+    //         0.0,
+    //     );
+    //     // ray.reset(0.0, lerp(-5.0, 5.0, idx as f64 / N_RAYS as f64));
+    //     ray.print_state(false, idx);
+    //     while ray.next_boundary() {
+    //         ray.print_state(false, idx);
+    //     }
+    //     println!("");
+    // }
 }
