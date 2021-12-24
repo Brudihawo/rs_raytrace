@@ -49,7 +49,7 @@ struct Ray {
     x: f64,
     y: f64,
     angle: f64,
-    cur_n: f64,
+    cur_idx: f64,
     boundary: usize,
     boundaries: Vec<BoundaryType>,
 }
@@ -57,7 +57,7 @@ struct Ray {
 impl Ray {
     fn check_total_reflection(angle: f64, cur_n: f64, next_n: f64) -> bool {
         if next_n < cur_n {
-            let alpha_g = (cur_n / next_n).asin().abs();
+            let alpha_g = (next_n / cur_n).asin().abs();
             return angle.abs() > alpha_g.abs();
         }
         false
@@ -67,7 +67,7 @@ impl Ray {
             x,
             y,
             angle,
-            cur_n: n,
+            cur_idx: n,
             boundary: 0,
             boundaries,
 
@@ -81,7 +81,7 @@ impl Ray {
     fn reset(&mut self, angle: f64, y: f64) {
         self.x = self.o_x;
         self.y = y;
-        self.cur_n = self.o_n;
+        self.cur_idx = self.o_n;
         self.angle = angle;
         self.o_angle = angle;
         self.boundary = 0;
@@ -95,7 +95,7 @@ impl Ray {
                 self.x,
                 self.y,
                 rad_to_deg(self.angle),
-                self.cur_n
+                self.cur_idx
             );
         } else {
             println!("{}, {}, {}, {}", id, self.x, self.y, rad_to_deg(self.angle));
@@ -125,14 +125,13 @@ impl Ray {
                     self.y += delta_y;
 
                     // test total reflection
-                    if Ray::check_total_reflection(self.angle, self.cur_n, *opt_idx) {
-                        // println!("Total Reflection");
+                    if Ray::check_total_reflection(self.angle, self.cur_idx, *opt_idx) {
                         return false;
                     }
 
                     // compute geometric refraction
-                    self.angle = (self.cur_n / opt_idx * self.angle.sin()).asin();
-                    self.cur_n = *opt_idx;
+                    self.angle = (self.cur_idx / opt_idx * self.angle.sin()).asin();
+                    self.cur_idx = *opt_idx;
 
                     return true;
                 }
@@ -163,13 +162,13 @@ impl Ray {
 
                     // incident angle
                     let alpha = inter_angle - self.angle;
-                    if Ray::check_total_reflection(alpha, self.cur_n, *opt_idx) {
+                    if Ray::check_total_reflection(alpha, self.cur_idx, *opt_idx) {
                         return false;
                     }
 
                     // compute geometric refraction
-                    self.angle = inter_angle - (self.cur_n / opt_idx * alpha.sin()).asin();
-                    self.cur_n = *opt_idx;
+                    self.angle = inter_angle - (self.cur_idx / opt_idx * alpha.sin()).asin();
+                    self.cur_idx = *opt_idx;
 
                     if self.angle.is_nan() {
                         return false;
@@ -187,13 +186,13 @@ impl Ray {
 
                     // incident angle
                     let alpha = inter_angle - self.angle;
-                    if Ray::check_total_reflection(alpha, self.cur_n, *opt_idx) {
+                    if Ray::check_total_reflection(alpha, self.cur_idx, *opt_idx) {
                         return false;
                     }
 
                     // compute geometric refraction
-                    self.angle = inter_angle - (self.cur_n / opt_idx * alpha.sin()).asin();
-                    self.cur_n = *opt_idx;
+                    self.angle = inter_angle - (self.cur_idx / opt_idx * alpha.sin()).asin();
+                    self.cur_idx = *opt_idx;
 
                     if self.angle.is_nan() {
                         return false;
@@ -202,7 +201,6 @@ impl Ray {
                     return true;
                 }
             }
-            // TODO: Negative Radius
             BoundaryType::Conic {
                 opt_idx,
                 midpoint,
@@ -264,35 +262,42 @@ impl Ray {
 
                 if self.y < 0.0 {
                     if *radius > 0.0 {
-                        inter_angle = PI + (-diff).atan();
-                        alpha = self.angle - inter_angle + FRAC_PI_2;
+                        inter_angle = -diff.atan();
+                        alpha = -FRAC_PI_2 - inter_angle + self.angle;
                         self.angle =
-                            FRAC_PI_2 - inter_angle - (self.cur_n / opt_idx * alpha.sin()).asin();
+                            FRAC_PI_2 + inter_angle + (self.cur_idx / opt_idx * alpha.sin()).asin();
                     } else {
-                        inter_angle = PI - (-diff).atan();
-                        alpha = FRAC_PI_2 - self.angle - inter_angle;
-                        self.angle =
-                            FRAC_PI_2 - inter_angle - (self.cur_n / opt_idx * alpha.sin()).asin();
+                        inter_angle = diff.atan();
+                        alpha = -FRAC_PI_2 - inter_angle - self.angle;
+                        self.angle = -FRAC_PI_2
+                            - inter_angle
+                            - (self.cur_idx / opt_idx * alpha.sin()).asin();
                     }
+                    // incident angle
                 } else if self.y > 0.0 {
                     if *radius > 0.0 {
                         inter_angle = diff.atan();
-                        alpha = self.angle - inter_angle + FRAC_PI_2;
-                        self.angle =
-                            FRAC_PI_2 - inter_angle - (self.cur_n / opt_idx * alpha.sin()).asin();
+                        alpha = FRAC_PI_2 - inter_angle + self.angle;
+                        self.angle = -FRAC_PI_2
+                            + inter_angle
+                            + (self.cur_idx / opt_idx * alpha.sin()).asin();
                     } else {
                         inter_angle = (-diff).atan();
-                        alpha = FRAC_PI_2 - self.angle - inter_angle;
+                        alpha = FRAC_PI_2 - inter_angle - self.angle;
                         self.angle =
-                            FRAC_PI_2 - inter_angle - (self.cur_n / opt_idx * alpha.sin()).asin();
+                            FRAC_PI_2 - inter_angle - (self.cur_idx / opt_idx * alpha.sin()).asin();
                     }
                 } else {
                     // handle intersection at y=0
-                    self.angle = (self.cur_n / opt_idx * self.angle.sin()).asin();
+                    alpha = self.angle;
+                    self.angle = (self.cur_idx / opt_idx * self.angle.sin()).asin();
                     inter_angle = FRAC_PI_2;
                 }
-                eprintln!("{}", rad_to_deg(inter_angle));
-                self.cur_n = *opt_idx;
+                // check for total reflection (indirectly)
+                if self.angle.is_nan() {
+                    return false;
+                }
+                self.cur_idx = *opt_idx;
 
                 true
             }
@@ -426,59 +431,122 @@ fn validate_boundaries(boundaries: &Vec<BoundaryType>) -> bool {
     true
 }
 
+fn ray_fan(mut ray: Ray, n_rays: usize, min_angle: f64, max_angle: f64, in_deg: bool) {
+    for idx in 0..(n_rays + 1) {
+        ray.reset(
+            lerp(
+                if in_deg {
+                    deg_to_rad(min_angle)
+                } else {
+                    min_angle
+                },
+                if in_deg {
+                    deg_to_rad(max_angle)
+                } else {
+                    max_angle
+                },
+                idx as f64 / n_rays as f64,
+            ),
+            0.0,
+        );
+        ray.print_state(false, idx);
+        while ray.next_boundary() {
+            ray.print_state(false, idx);
+        }
+        println!("");
+    }
+}
+
+fn ray_array(mut ray: Ray, n_rays: usize, min_height: f64, max_height: f64) {
+    for idx in 0..(n_rays + 1) {
+        ray.reset(
+            0.0,
+            lerp(min_height, max_height, idx as f64 / n_rays as f64),
+        );
+        ray.print_state(false, idx);
+        while ray.next_boundary() {
+            ray.print_state(false, idx);
+        }
+        println!("");
+    }
+}
+
 fn main() {
-    let boundaries = Vec::from([
+    let boundaries1 = Vec::from([
         BoundaryType::Conic {
-            opt_idx: 2.0,
-            midpoint: 4.0,
+            opt_idx: 1.5,
+            midpoint: 15.0,
             radius: 10.0,
             conic_param: -0.9,
             height: 10.0,
         },
-        BoundaryType::Spherical {
-            opt_idx: 2.0,
-            midpoint: 4.0,
-            radius: 2.0,
+        BoundaryType::Conic {
+            opt_idx: 1.0,
+            midpoint: 20.0,
+            radius: -10.0,
+            conic_param: -0.9,
             height: 10.0,
         },
-        // BoundaryType::Line {
-        //     opt_idx: 1.0,
-        //     midpoint: 20.0,
-        //     radius: 10.0,
-        // },
         BoundaryType::Line {
             opt_idx: 2.0,
             midpoint: 43.0,
             radius: 10.0,
         },
     ]);
-    if !validate_boundaries(&boundaries) {
-        eprintln!("Boundary Validation Failed. Aborting...");
-        std::process::exit(1);
-    }
-    dump_boundaries(&boundaries).unwrap();
 
-    let mut ray: Ray = Ray::new(0.0, 0.0, deg_to_rad(30.0), 1.0, boundaries);
-    ray.print_state(false, 0);
-    while ray.next_boundary() {
-        ray.print_state(false, 0);
-    }
+    let boundaries2 = Vec::from([
+        BoundaryType::Conic {
+            opt_idx: 1.5,
+            midpoint: 10.0,
+            radius: 10.0,
+            conic_param: -0.9,
+            height: 10.0,
+        },
+        BoundaryType::Line {
+            opt_idx: 1.0,
+            midpoint: 20.0,
+            radius: 10.0,
+        },
+        BoundaryType::Line {
+            opt_idx: 2.0,
+            midpoint: 28.0,
+            radius: 20.0,
+        },
+    ]);
 
-    // const N_RAYS: usize = 20;
-    // for idx in 0..(N_RAYS + 1) {
-    //     ray.reset(
-    //         lerp(
-    //             deg_to_rad(-30.0),
-    //             deg_to_rad(30.0),
-    //             idx as f64 / N_RAYS as f64,
-    //         ),
-    //         0.0,
-    //     );
-    //     // ray.reset(0.0, lerp(-5.0, 5.0, idx as f64 / N_RAYS as f64));
-    //     ray.print_state(false, idx);
-    //     while ray.next_boundary() {
-    //         ray.print_state(false, idx);
-    //     }
-    //     println!("");
+    let boundaries3 = Vec::from([
+        BoundaryType::Line {
+            opt_idx: 1.5,
+            midpoint: 15.0,
+            radius: 10.0,
+        },
+        BoundaryType::Conic {
+            opt_idx: 1.0,
+            midpoint: 20.0,
+            radius: -10.0,
+            conic_param: -0.9,
+            height: 10.0,
+        },
+        BoundaryType::Line {
+            opt_idx: 2.0,
+            midpoint: 28.0,
+            radius: 20.0,
+        },
+    ]);
+
+    // if !validate_boundaries(&boundaries1) {
+    //     eprintln!("Boundary Validation Failed. Aborting...");
+    //     std::process::exit(1);
+    // }
+    dump_boundaries(&boundaries1).unwrap();
+
+    let mut ray: Ray = Ray::new(0.0, 0.0, deg_to_rad(-10.0), 1.0, boundaries1);
+
+    ray_fan(ray, 20, -30.0, 30.0, true);
+    // ray_array(ray, 20, -5.0, 5.0);
+
+    // ray.print_state(false, 0);
+    // while ray.next_boundary() {
+    //     ray.print_state(false, 0);
     // }
 }
