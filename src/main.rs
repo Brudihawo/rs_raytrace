@@ -289,9 +289,9 @@ impl Ray {
                     }
                 } else {
                     // handle intersection at y=0
-                    alpha = self.angle;
+                    alpha = self.angle; // for debug purposes
                     self.angle = (self.cur_idx / opt_idx * self.angle.sin()).asin();
-                    inter_angle = FRAC_PI_2;
+                    inter_angle = FRAC_PI_2; // for debug purposes
                 }
                 // check for total reflection (indirectly)
                 if self.angle.is_nan() {
@@ -407,7 +407,6 @@ fn validate_boundaries(boundaries: &Vec<BoundaryType>) -> bool {
                 ..
             } => {
                 if radius == 0.0 || opt_idx < 0.0 {
-                    //|| conic_param <= -1.0 {
                     eprintln!(
                         "Invalid Parameters for Conic Boundary at index {}: Invalid values",
                         idx
