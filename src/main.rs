@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+use serde_json;
 use std::f64::consts::{FRAC_1_PI, FRAC_PI_2, PI};
 use std::fs::File;
 use std::io::prelude::*;
@@ -18,6 +20,7 @@ fn conic(r: f64, kappa: f64, radius: f64) -> f64 {
     r.powi(2) / (radius * (1.0 - (1.0 + kappa) * r.powi(2) / radius.powi(2)))
 }
 
+#[derive(Serialize, Deserialize)]
 enum BoundaryType {
     Line {
         opt_idx: f64,
@@ -38,6 +41,8 @@ enum BoundaryType {
         height: f64, // maximum distance from optical axis
     },
 }
+
+#[derive(Serialize, Deserialize)]
 
 struct Ray {
     // Original State
@@ -305,76 +310,72 @@ impl Ray {
     }
 }
 
-fn dump_boundaries(boundaries: &Vec<BoundaryType>) -> Result<(), std::io::Error> {
-    let fname = "boundaries.json";
-    let mut file = File::create(fname)?;
-    file.write(b"{\n")?;
-    for (i, boundary) in boundaries.iter().enumerate() {
-        file.write(format!("  \"{}\": {{\n", i).as_bytes())?;
-        match boundary {
-            BoundaryType::Line {
-                opt_idx,
-                midpoint,
-                radius,
+#[derive(Serialize, Deserialize)]
+enum Mode {
+    RayFan {
+        n_rays: usize,
+        min_angle: f64,
+        max_angle: f64,
+        in_deg: bool,
+    },
+    RayArray {
+        n_rays: usize,
+        min_height: f64,
+        max_height: f64,
+    },
+}
+
+#[derive(Serialize, Deserialize)]
+struct RaySim {
+    mode: Mode,
+    ray: Ray,
+}
+
+impl RaySim {
+    fn sim(&mut self) {
+        match self.mode {
+            Mode::RayArray {
+                n_rays,
+                min_height,
+                max_height,
             } => {
-                file.write(
-                    format!(
-                        "    \"type\": \"line\",\n    \
-                             \"opt_idx\": {},\n    \
-                              \"midpoint\": {},\n    \
-                             \"radius\": {}\n",
-                        opt_idx, midpoint, radius
-                    )
-                    .as_bytes(),
-                )?;
+                for idx in 0..n_rays + 1 {
+                    let cur_height = lerp(min_height, max_height, idx as f64 / n_rays as f64);
+                    self.ray.reset(self.ray.o_angle, cur_height);
+                    self.ray.print_state(false, idx);
+                    while self.ray.next_boundary() {
+                        self.ray.print_state(false, idx);
+                    }
+                    println!("");
+                }
             }
-            BoundaryType::Spherical {
-                opt_idx,
-                midpoint,
-                radius,
-                height,
+            Mode::RayFan {
+                n_rays,
+                mut min_angle,
+                mut max_angle,
+                in_deg,
             } => {
-                file.write(
-                    format!(
-                        "    \"type\": \"spherical\",\n    \
-                             \"opt_idx\": {},\n    \
-                             \"midpoint\": {},\n    \
-                             \"radius\": {},\n    \
-                             \"height\": {}\n",
-                        opt_idx, midpoint, radius, height
-                    )
-                    .as_bytes(),
-                )?;
+                if in_deg {
+                    min_angle = deg_to_rad(min_angle);
+                    max_angle = deg_to_rad(min_angle);
+                }
+                for idx in 0..n_rays + 1 {
+                    // convert angle
+                    let cur_angle = lerp(min_angle, max_angle, idx as f64 / n_rays as f64);
+                    self.ray.reset(cur_angle, self.ray.o_y);
+                    self.ray.print_state(false, idx);
+                    while self.ray.next_boundary() {
+                        self.ray.print_state(false, idx);
+                    }
+                    println!("");
+                }
             }
-            BoundaryType::Conic {
-                opt_idx,
-                midpoint,
-                radius,
-                conic_param,
-                height,
-            } => {
-                file.write(
-                    format!(
-                        "    \"type\": \"conical\",\n    \
-                             \"opt_idx\": {},\n    \
-                             \"midpoint\": {},\n    \
-                             \"radius\": {},\n    \
-                             \"height\": {},\n    \
-                             \"conic_param\": {}\n",
-                        opt_idx, midpoint, radius, height, conic_param
-                    )
-                    .as_bytes(),
-                )?;
-            }
-        }
-        if i < boundaries.len() - 1 {
-            file.write(b"  },\n")?;
-        } else {
-            file.write(b"  }\n")?;
         }
     }
-    file.write(b"}\n")?;
-    Ok(())
+}
+
+fn read_infile(fname: String) -> Result<(RaySim, Mode), ()> {
+    Err(())
 }
 
 fn validate_boundaries(boundaries: &Vec<BoundaryType>) -> bool {
@@ -533,19 +534,21 @@ fn main() {
         },
     ]);
 
-    // if !validate_boundaries(&boundaries1) {
-    //     eprintln!("Boundary Validation Failed. Aborting...");
-    //     std::process::exit(1);
-    // }
-    dump_boundaries(&boundaries1).unwrap();
+    let mut sim = RaySim {
+        mode: Mode::RayArray {
+            n_rays: 20,
+            max_height: 4.0,
+            min_height: -4.0,
+        },
+        ray: Ray::new(0.0, 0.0, 0.0, 1.0, boundaries1),
+    };
 
-    let mut ray: Ray = Ray::new(0.0, 0.0, deg_to_rad(-10.0), 1.0, boundaries1);
+    sim.sim();
 
-    ray_fan(ray, 20, -30.0, 30.0, true);
-    // ray_array(ray, 20, -5.0, 5.0);
-
-    // ray.print_state(false, 0);
-    // while ray.next_boundary() {
-    //     ray.print_state(false, 0);
-    // }
+    {
+        let mut file = File::create("boundaries.json").unwrap();
+        let mut sim_json_writer = serde_json::to_writer_pretty(&file, &sim).unwrap();
+        file.write(b"\n");
+    }
 }
+

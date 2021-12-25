@@ -39,15 +39,18 @@ def draw_conic(midpoint, radius, conic_param, max_height, samples=50):
 
 
 with open("./boundaries.json", "r") as file:
-    for id, b in json.load(file).items():
-        print(f"Btype: {b['type']}")
+    sim_config = json.load(file)
+    for b in sim_config["ray"]["boundaries"]:
+        type = list(b.keys())[0]
+        print(f"Btype: {type}")
+        b = b[type]
 
-        if b["type"] == "line":
+        if type == "Line":
             plt.vlines(b["midpoint"], -b["radius"],
                        b["radius"], color="tab:red")
             plt.text(b["midpoint"], b["radius"] * 0.9,
                      b["opt_idx"])
-        elif b["type"] == "spherical":
+        elif type == "Spherical":
             draw_circle(b["midpoint"], b["radius"],
                         b["height"], 150)
 
@@ -63,7 +66,7 @@ with open("./boundaries.json", "r") as file:
             plt.text(xmax, b["height"] * 0.9,
                      b["opt_idx"])
 
-        elif b["type"] == "conical":
+        elif type == "Conic":
             draw_conic(b["midpoint"], b["radius"],
                        b["conic_param"], b["height"])
 
