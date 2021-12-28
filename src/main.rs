@@ -20,7 +20,7 @@ enum BoundaryType {
     Line {
         opt_idx: f64,
         midpoint: f64,
-        radius: f64, // maximum distance from optical axis
+        height: f64, // maximum distance from optical axis
     },
     Spherical {
         opt_idx: f64,
@@ -38,7 +38,15 @@ enum BoundaryType {
 }
 
 #[derive(Serialize, Deserialize)]
+struct RayTemplate {
+    x: f64,
+    y: f64,
+    angle: f64,
+    o_idx: f64,
+    boundaries: Vec<BoundaryType>,
+}
 
+#[derive(Serialize, Deserialize)]
 struct Ray {
     // Original State
     o_x: f64,
@@ -96,13 +104,13 @@ impl Ray {
             BoundaryType::Line {
                 opt_idx,
                 midpoint,
-                radius,
+                height,
             } => {
                 let delta_x = midpoint - self.x;
                 let delta_y = delta_x * self.angle.tan();
 
                 // Check if out of bounds
-                if (self.y + delta_y).abs() > *radius {
+                if (self.y + delta_y).abs() > *height {
                     return false;
                 } else {
                     self.x += delta_x;
@@ -305,12 +313,37 @@ enum Mode {
 }
 
 #[derive(Serialize, Deserialize)]
+struct SimTemplate {
+    mode: Mode,
+    ray: RayTemplate,
+}
+
 struct RaySim {
     mode: Mode,
     ray: Ray,
 }
 
 impl RaySim {
+    fn from_template(template: SimTemplate) -> RaySim {
+        RaySim {
+            mode: template.mode,
+            ray: Ray {
+                o_x: template.ray.x,
+                o_y: template.ray.y,
+                o_n: template.ray.o_idx,
+                o_angle: template.ray.angle,
+
+                x: template.ray.x,
+                y: template.ray.y,
+                cur_idx: template.ray.o_idx,
+                angle: 0.0,
+
+                boundary: 0,
+                boundaries: template.ray.boundaries
+            }
+        }
+    }
+
     fn sim(&mut self) {
         match self.mode {
             Mode::RayArray {
@@ -354,10 +387,6 @@ impl RaySim {
     }
 }
 
-fn read_infile(fname: String) -> Result<(RaySim, Mode), ()> {
-    Err(())
-}
-
 fn validate_boundaries(boundaries: &Vec<BoundaryType>) -> bool {
     for (idx, boundary) in boundaries.iter().enumerate() {
         match *boundary {
@@ -373,7 +402,7 @@ fn validate_boundaries(boundaries: &Vec<BoundaryType>) -> bool {
                 }
             }
             BoundaryType::Line {
-                radius, opt_idx, ..
+                height: radius, opt_idx, ..
             } => {
                 if radius == 0.0 || opt_idx < 0.0 {
                     eprintln!("Invalid Parameters for Line Boundary at index {}", idx);
@@ -433,9 +462,10 @@ fn main() {
     let infile_name = &args[1];
     match File::open(infile_name) {
         Ok(infile) => {
-            let res: Result<RaySim, serde_json::Error> = serde_json::from_reader(infile);
+            let res: Result<SimTemplate, serde_json::Error> = serde_json::from_reader(infile);
             match res {
-                Ok(mut sim) => {
+                Ok(mut sim_temp) => {
+                    let mut sim = RaySim::from_template(sim_temp);
                     sim.sim();
                 }
                 Err(error) => {

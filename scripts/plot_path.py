@@ -49,9 +49,9 @@ with open(filename, "r") as file:
         b = b[type]
 
         if type == "Line":
-            plt.vlines(b["midpoint"], -b["radius"],
-                       b["radius"], color="tab:red")
-            plt.text(b["midpoint"], b["radius"] * 0.9,
+            plt.vlines(b["midpoint"], -b["height"],
+                       b["height"], color="tab:red")
+            plt.text(b["midpoint"], b["height"] * 0.9,
                      b["opt_idx"])
         elif type == "Spherical":
             draw_circle(b["midpoint"], b["radius"],
