@@ -102,21 +102,21 @@ Where
 
 `Line` boundaries are defined by a point on the optical axis (`midpoint` / `m`) and a
 maximum allowed distance (`height`) from the optical axis.
-<center>
+<p align="center">
   <img src="https://render.githubusercontent.com/render/math?math=\color{orange}{x = m}">
-</center>
+</p>
 
 `Spherical` boundaries are defined by a position (`midpoint` / `m`) on the optical axis
 and a radius.
-<center>
+<p align="center">
   <img src="https://render.githubusercontent.com/render/math?math=\color{orange}{(x%20-%20m)^2%20%2B%20y^2 = R^2}">
-</center>
+</p>
 
 `Conic` boundaries are defined by the conic formula with all polynomial coefficients
 set to zero.
-<center>
+<p align="center">
   <img src="https://render.githubusercontent.com/render/math?math=\color{orange}{z(r)%20=%20m%20%2B%20\frac{r^2}{R%20\left(1%20%2B%20\sqrt{1%20-%20(1%20%2B%20\kappa)%20\frac{r^2}{R^2}}\right)}}">
-</center>
+</p>
 
 All of the boundary types have the additional restriction:
   <img src="https://render.githubusercontent.com/render/math?math=\color{orange}{y \leq \text{height}}">, constraining the distance of intersection points to the optical axis.
