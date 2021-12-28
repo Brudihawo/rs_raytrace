@@ -1,5 +1,6 @@
 #!/bin/bash
 
+infile=${1:-infile.json}
 cargo build
-./target/debug/rs_raytrace > path.csv
-python ./scripts/plot_path.py
+./target/debug/rs_raytrace $infile > path.csv
+python ./scripts/plot_path.py $infile

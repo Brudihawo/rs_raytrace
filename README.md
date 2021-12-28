@@ -1,8 +1,7 @@
 # Ray Tracing Demo for Geometric Optics in Rust
 
 ## Roadmap
-1. Implement Reading from File
-2. Implement Mirrors / Reflection
+1. Implement Mirrors / Reflection
 
 ## Quickstart
 ```bash
@@ -17,3 +16,5 @@
   - Spherical
   - Conic
 - Plotting Visualisation using Python + Matplotlib
+- Read simulation configuration from file
+

@@ -2,7 +2,6 @@ use serde::{Deserialize, Serialize};
 use serde_json;
 use std::f64::consts::{FRAC_1_PI, FRAC_PI_2, PI};
 use std::fs::File;
-use std::io::prelude::*;
 
 fn deg_to_rad(deg: f64) -> f64 {
     deg * PI / 180.0f64
@@ -14,10 +13,6 @@ fn rad_to_deg(rad: f64) -> f64 {
 
 fn lerp(x0: f64, x1: f64, t: f64) -> f64 {
     return x0 * (1.0 - t) + x1 * t;
-}
-
-fn conic(r: f64, kappa: f64, radius: f64) -> f64 {
-    r.powi(2) / (radius * (1.0 - (1.0 + kappa) * r.powi(2) / radius.powi(2)))
 }
 
 #[derive(Serialize, Deserialize)]
@@ -67,22 +62,6 @@ impl Ray {
         }
         false
     }
-    fn new(x: f64, y: f64, angle: f64, n: f64, boundaries: Vec<BoundaryType>) -> Ray {
-        Ray {
-            x,
-            y,
-            angle,
-            cur_idx: n,
-            boundary: 0,
-            boundaries,
-
-            o_x: x,
-            o_y: y,
-            o_angle: angle,
-            o_n: n,
-        }
-    }
-
     fn reset(&mut self, angle: f64, y: f64) {
         self.x = self.o_x;
         self.y = y;
@@ -357,8 +336,9 @@ impl RaySim {
             } => {
                 if in_deg {
                     min_angle = deg_to_rad(min_angle);
-                    max_angle = deg_to_rad(min_angle);
+                    max_angle = deg_to_rad(max_angle);
                 }
+
                 for idx in 0..n_rays + 1 {
                     // convert angle
                     let cur_angle = lerp(min_angle, max_angle, idx as f64 / n_rays as f64);
@@ -431,124 +411,52 @@ fn validate_boundaries(boundaries: &Vec<BoundaryType>) -> bool {
     true
 }
 
-fn ray_fan(mut ray: Ray, n_rays: usize, min_angle: f64, max_angle: f64, in_deg: bool) {
-    for idx in 0..(n_rays + 1) {
-        ray.reset(
-            lerp(
-                if in_deg {
-                    deg_to_rad(min_angle)
-                } else {
-                    min_angle
-                },
-                if in_deg {
-                    deg_to_rad(max_angle)
-                } else {
-                    max_angle
-                },
-                idx as f64 / n_rays as f64,
-            ),
-            0.0,
-        );
-        ray.print_state(false, idx);
-        while ray.next_boundary() {
-            ray.print_state(false, idx);
-        }
-        println!("");
-    }
-}
-
-fn ray_array(mut ray: Ray, n_rays: usize, min_height: f64, max_height: f64) {
-    for idx in 0..(n_rays + 1) {
-        ray.reset(
-            0.0,
-            lerp(min_height, max_height, idx as f64 / n_rays as f64),
-        );
-        ray.print_state(false, idx);
-        while ray.next_boundary() {
-            ray.print_state(false, idx);
-        }
-        println!("");
-    }
+fn exit(message: String, errcode: i32) {
+    eprintln!("{}", message);
+    std::process::exit(errcode);
 }
 
 fn main() {
-    let boundaries1 = Vec::from([
-        BoundaryType::Conic {
-            opt_idx: 1.5,
-            midpoint: 15.0,
-            radius: 10.0,
-            conic_param: -0.9,
-            height: 10.0,
-        },
-        BoundaryType::Conic {
-            opt_idx: 1.0,
-            midpoint: 20.0,
-            radius: -10.0,
-            conic_param: -0.9,
-            height: 10.0,
-        },
-        BoundaryType::Line {
-            opt_idx: 2.0,
-            midpoint: 43.0,
-            radius: 10.0,
-        },
-    ]);
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() != 2 {
+        exit(
+            format!(
+                "Provide an infile name as the first argument!\n\
+                 Usage:\n    \
+                 {} <infile_name>",
+                     args[0]
+            ),
+            1,
+        );
+    }
 
-    let boundaries2 = Vec::from([
-        BoundaryType::Conic {
-            opt_idx: 1.5,
-            midpoint: 10.0,
-            radius: 10.0,
-            conic_param: -0.9,
-            height: 10.0,
-        },
-        BoundaryType::Line {
-            opt_idx: 1.0,
-            midpoint: 20.0,
-            radius: 10.0,
-        },
-        BoundaryType::Line {
-            opt_idx: 2.0,
-            midpoint: 28.0,
-            radius: 20.0,
-        },
-    ]);
-
-    let boundaries3 = Vec::from([
-        BoundaryType::Line {
-            opt_idx: 1.5,
-            midpoint: 15.0,
-            radius: 10.0,
-        },
-        BoundaryType::Conic {
-            opt_idx: 1.0,
-            midpoint: 20.0,
-            radius: -10.0,
-            conic_param: -0.9,
-            height: 10.0,
-        },
-        BoundaryType::Line {
-            opt_idx: 2.0,
-            midpoint: 28.0,
-            radius: 20.0,
-        },
-    ]);
-
-    let mut sim = RaySim {
-        mode: Mode::RayArray {
-            n_rays: 20,
-            max_height: 4.0,
-            min_height: -4.0,
-        },
-        ray: Ray::new(0.0, 0.0, 0.0, 1.0, boundaries1),
-    };
-
-    sim.sim();
-
-    {
-        let mut file = File::create("boundaries.json").unwrap();
-        let mut sim_json_writer = serde_json::to_writer_pretty(&file, &sim).unwrap();
-        file.write(b"\n");
+    let infile_name = &args[1];
+    match File::open(infile_name) {
+        Ok(infile) => {
+            let res: Result<RaySim, serde_json::Error> = serde_json::from_reader(infile);
+            match res {
+                Ok(mut sim) => {
+                    sim.sim();
+                }
+                Err(error) => {
+                    exit(
+                        format!(
+                            "Deserialisation of `{}` failed with error:\n{}!",
+                            infile_name,
+                            error.to_string()
+                        ),
+                        1,
+                    );
+                }
+            }
+        }
+        Err(error) => {
+            eprintln!(
+                "Opening file {} failed with error: {}!",
+                infile_name,
+                error.to_string()
+            );
+            std::process::exit(1);
+        }
     }
 }
-

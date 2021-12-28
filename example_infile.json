@@ -1,0 +1,48 @@
+{
+  "mode": {
+    "RayFan": {
+      "n_rays": 20,
+      "min_angle": -10.0,
+      "max_angle": 10.0,
+      "in_deg": true
+    }
+  },
+  "ray": {
+    "o_x": 0.0,
+    "o_y": 1.0,
+    "o_angle": 3.0,
+    "o_n": 1.0,
+    "x": 43.0,
+    "y": -6.745451954864436,
+    "angle": -0.20074382045583963,
+    "cur_idx": 2.0,
+    "boundary": 3,
+    "boundaries": [
+      {
+        "Conic": {
+          "opt_idx": 1.5,
+          "midpoint": 15.0,
+          "radius": 10.0,
+          "conic_param": -0.9,
+          "height": 10.0
+        }
+      },
+      {
+        "Conic": {
+          "opt_idx": 1.0,
+          "midpoint": 20.0,
+          "radius": -10.0,
+          "conic_param": -0.9,
+          "height": 10.0
+        }
+      },
+      {
+        "Line": {
+          "opt_idx": 2.0,
+          "midpoint": 43.0,
+          "radius": 10.0
+        }
+      }
+    ]
+  }
+}

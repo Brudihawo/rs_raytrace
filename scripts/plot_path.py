@@ -1,3 +1,4 @@
+import sys
 import json
 
 import numpy as np
@@ -38,7 +39,9 @@ def draw_conic(midpoint, radius, conic_param, max_height, samples=50):
     plt.plot(ys + midpoint, xs, c="tab:red")
 
 
-with open("./boundaries.json", "r") as file:
+filename = sys.argv[1]
+
+with open(filename, "r") as file:
     sim_config = json.load(file)
     for b in sim_config["ray"]["boundaries"]:
         type = list(b.keys())[0]
