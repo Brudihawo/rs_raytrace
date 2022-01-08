@@ -1,0 +1,27 @@
+{
+  "mode": {
+    "RayFan": {
+      "n_rays": 20,
+      "min_angle": -10.0,
+      "max_angle": 10.0,
+      "in_deg": true
+    }
+  },
+  "ray": {
+    "x": 0.0,
+    "y": 0.0,
+    "angle": 0.0,
+    "o_idx": 1.0,
+    "boundaries": [
+      {
+        "Line": {
+          "opt_idx": 1.5,
+          "x": 15.0,
+          "y": 0.0,
+          "angle": 0.1,
+          "height": 10.0
+        }
+      }
+    ]
+  }
+}

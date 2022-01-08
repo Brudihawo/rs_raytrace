@@ -22,12 +22,12 @@ pub struct Ray {
     pub o_angle: f64,
     pub o_n: f64,
     // Current State
-    pub x: f64,
-    pub y: f64,
-    pub angle: f64,
-    pub cur_idx: f64,
-    pub boundary: usize,
-    pub boundaries: Vec<BoundaryType>,
+    x: f64,
+    y: f64,
+    angle: f64,
+    cur_idx: f64,
+    boundary: usize,
+    boundaries: Vec<BoundaryType>,
 }
 
 impl Ray {
@@ -87,10 +87,19 @@ impl Ray {
         match &self.boundaries[bound] {
             BoundaryType::Line {
                 opt_idx,
-                midpoint,
+                x,
+                y,
+                angle,
                 height,
             } => {
-                let delta_x = midpoint - self.x;
+                let delta_x: f64;
+                if *angle != 0.0 {
+                    // FIXME: math is wrong here
+                    delta_x = (y - self.y - (self.x - x) * self.angle.tan())
+                        / (self.angle.tan() + (angle - FRAC_PI_2).tan());
+                } else {
+                    delta_x = x - self.x;
+                }
                 let delta_y = delta_x * self.angle.tan();
 
                 // Check if out of bounds
@@ -106,7 +115,9 @@ impl Ray {
                     }
 
                     // compute geometric refraction
-                    self.angle = (self.cur_idx / opt_idx * self.angle.sin()).asin();
+                    let alpha = self.angle + angle;
+                    // angle positive counter clockwise
+                    self.angle = (self.cur_idx / opt_idx * alpha.sin()).asin() - angle;
                     self.cur_idx = *opt_idx;
 
                     return true;
@@ -115,7 +126,7 @@ impl Ray {
 
             BoundaryType::Spherical {
                 opt_idx,
-                midpoint,
+                x: midpoint,
                 radius,
                 height,
             } => {

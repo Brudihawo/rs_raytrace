@@ -39,6 +39,16 @@ def draw_conic(midpoint, radius, conic_param, max_height, samples=50):
     plt.plot(ys + midpoint, xs, c="tab:red")
 
 
+def draw_line(x, y, height, angle):
+    x0 = x - height * np.tan(angle)
+    x1 = x + height * np.tan(angle)
+
+    y0 = y - height
+    y1 = y + height
+
+    plt.plot([x0, x1], [y0, y1], color="tab:red")
+
+
 filename = sys.argv[1]
 
 with open(filename, "r") as file:
@@ -49,22 +59,21 @@ with open(filename, "r") as file:
         b = b[type]
 
         if type == "Line":
-            plt.vlines(b["midpoint"], -b["height"],
-                       b["height"], color="tab:red")
-            plt.text(b["midpoint"], b["height"] * 0.9,
-                     b["opt_idx"])
+            draw_line(b["x"], b["y"], b["height"], b["angle"])
+            # plt.text(b["x"], b["height"] * 0.9,
+            #          b["opt_idx"])
         elif type == "Spherical":
-            draw_circle(b["midpoint"], b["radius"],
+            draw_circle(b["x"], b["radius"],
                         b["height"], 150)
 
             if b["radius"] > 0:
                 xmax = - np.sqrt(b["radius"] ** 2
                                  - b["height"] ** 2) \
-                    + b["midpoint"]
+                    + b["x"]
             else:
                 xmax = np.sqrt(b["radius"] ** 2
                                - b["height"] ** 2) \
-                    + b["midpoint"]
+                    + b["x"]
 
             plt.text(xmax, b["height"] * 0.9,
                      b["opt_idx"])
