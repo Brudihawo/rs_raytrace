@@ -6,14 +6,14 @@
 3. Optimisaiton of Key features
 
 ## Quickstart
-```bash
+```commandline
   $ git clone https://github.com/brudihawo/rs_raytrace
   $ cd rs_raytrace
   $ cargo build
 ```
 
 To execute an example simulation and plot (in project root):
-```bash
+```commandline
   $ ./scripts/exec_plot.sh example_infile.json
 ```
 
